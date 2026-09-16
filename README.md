@@ -23,15 +23,14 @@ For `gh auth login`, choose **GitHub.com → SSH → your key → Login with a w
 browser**. If the key is already on your GitHub account, pick **Skip** when it
 offers to upload it.
 
-Then clone this repository — copy the URL from its green **Code** button — and
-put the command on your PATH:
+Then clone this repository (this assumes KiCad is already installed):
 
 ```bash
 git clone https://github.com/Alex-Hermeling/kicad-git-starter.git ~/KiCad/kicad-git-starter
 ln -s ~/KiCad/kicad-git-starter/bootstrap/kicad-git-init.sh /opt/homebrew/bin/kicad-git-init.sh
 ```
 
-`/opt/homebrew/bin` is the Homebrew path on Apple silicon. Use `/usr/local/bin`,
+`/opt/homebrew/bin` is the Homebrew path on Apple Silicon. Use `/usr/local/bin`,
 `~/.local/bin`, or any other directory on your `PATH` instead.
 
 Check it worked:
