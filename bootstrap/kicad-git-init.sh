@@ -10,7 +10,9 @@
 
 set -euo pipefail
 
-STARTER_REPO="Alex-Hermeling/kicad-git-starter"
+# Only needed when this script runs outside a clone of the starter repo.
+# Point it at your own copy: export KICAD_GIT_STARTER_REPO=<owner>/<repo>
+STARTER_REPO="${KICAD_GIT_STARTER_REPO:-}"
 
 force=false
 create=true
@@ -61,6 +63,7 @@ starter=$(cd -P "$(dirname "$src")/.." && pwd)
 tmp_clone=""
 
 if [ ! -f "$starter/.github/workflows/repo-hygiene.yml" ]; then
+  [ -n "$STARTER_REPO" ] || die "the starter files aren't next to this script. Run it from a clone of the starter repo, or set KICAD_GIT_STARTER_REPO=<owner>/<repo>."
   say "Fetching the starter files from $STARTER_REPO"
   tmp_clone=$(mktemp -d)
   run gh repo clone "$STARTER_REPO" "$tmp_clone/starter" -- --depth 1 --quiet

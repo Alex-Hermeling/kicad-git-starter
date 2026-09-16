@@ -30,12 +30,16 @@ For `gh auth login`, choose **GitHub.com → SSH → your key → Login with a w
 browser**. If the key is already on your GitHub account, pick **Skip** when it
 offers to upload it.
 
-Then install the starter and put the command on your PATH:
+Then clone this repository — copy the URL from its green **Code** button — and
+put the command on your PATH:
 
 ```bash
-git clone git@github.com:Alex-Hermeling/kicad-git-starter.git ~/KiCad/kicad-git-starter
+git clone https://github.com/OWNER/kicad-git-starter.git ~/KiCad/kicad-git-starter
 ln -s ~/KiCad/kicad-git-starter/bootstrap/kicad-git-init.sh /opt/homebrew/bin/kicad-git-init.sh
 ```
+
+`/opt/homebrew/bin` is the Homebrew path on Apple silicon. Use `/usr/local/bin`,
+`~/.local/bin`, or any other directory on your `PATH` instead.
 
 Check it worked:
 
@@ -185,7 +189,6 @@ read-only token, so they only get the downloadable PDF artifact.
 
 The detection script, the file checks, the hook and `--dry-run` are tested. The
 live path — `gh repo create`, the ruleset and Pages API calls, and a real KiBot
-run using the detected paths — is built from a working setup
-([KiCad-git-tests](https://github.com/Alex-Hermeling/KiCad-git-tests)) but hasn't
+run using the detected paths — is lifted from a repo where it works, but hasn't
 been run end to end from this script yet. Use `--dry-run` first on your next
 board.
