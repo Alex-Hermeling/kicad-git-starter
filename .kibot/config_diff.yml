@@ -1,0 +1,51 @@
+# KiBot configuration: visual diff of a pull request against main.
+# Used by .github/workflows/kicad-diff.yml.
+#
+# "old" is the tip of main as fetched by the workflow; "new" is the checked-out
+# PR (GitHub checks out the PR merged into main, so the diff shows exactly
+# what merging would change).
+#
+# If you ever rename the main branch, change `origin/main` below and the
+# `branches` filter in kicad-diff.yml together.
+
+kibot:
+  version: 1
+
+outputs:
+  # Interactive web viewer, published to GitHub Pages and linked from the PR.
+  - name: kiri
+    comment: Interactive visual diff (KiRi) of this PR against main
+    type: kiri
+    dir: kiri
+    options:
+      # Newest first, like git log: KiRi shows the first entry as the new version
+      commits: [HEAD, origin/main]
+      labels: ['This PR (merged into main)', 'main']
+      # CI checkouts are clean; never add a "local changes" entry
+      include_dirty: false
+
+  # Static PDFs (green = added, red = removed), kept as a downloadable fallback.
+  - name: diff_pcb
+    comment: PCB changes vs main (green added, red removed)
+    type: diff
+    dir: diff
+    options:
+      pcb: true
+      old: origin/main
+      old_type: git
+      new_type: current
+      diff_mode: red_green
+      # Skip layers with no changes; a PR with no board change yields a single "No diff" page
+      only_different: true
+
+  - name: diff_sch
+    comment: Schematic changes vs main (green added, red removed)
+    type: diff
+    dir: diff
+    options:
+      pcb: false
+      old: origin/main
+      old_type: git
+      new_type: current
+      diff_mode: red_green
+      only_different: true

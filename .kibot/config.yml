@@ -1,0 +1,45 @@
+# KiBot configuration: visual previews of the design.
+# Used by .github/workflows/kicad-export.yml on every push to main.
+#
+# File names are fixed (no hashes or dates) so the links in README.md stay valid.
+# Everything lands under the directory passed with -d (kibot-output/ in CI).
+
+kibot:
+  version: 1
+
+outputs:
+  - name: schematic_svg
+    comment: Schematic as SVG (one file per sheet)
+    type: svg_sch_print
+    dir: schematic
+    options:
+      output: schematic.%x
+
+  - name: schematic_pdf
+    comment: Schematic as a single PDF, all sheets
+    type: pdf_sch_print
+    dir: schematic
+    options:
+      output: schematic.%x
+
+  - name: pcb_top
+    comment: 2D render of the top side of the board
+    type: pcbdraw
+    dir: pcb
+    options:
+      format: png
+      output: pcb-top.png
+      bottom: false
+      dpi: 300
+
+  - name: pcb_bottom
+    comment: 2D render of the bottom side of the board
+    type: pcbdraw
+    dir: pcb
+    options:
+      format: png
+      output: pcb-bottom.png
+      bottom: true
+      # Mirror so the bottom reads the way you see it when you flip the physical board
+      mirror: true
+      dpi: 300

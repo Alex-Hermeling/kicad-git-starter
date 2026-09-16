@@ -1,0 +1,71 @@
+name: KiCad export
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.kicad_sch'
+      - '**.kicad_pcb'
+      - '**.kicad_pro'
+      - '.kicad-ci.env'
+      - '.kibot/config.yml'
+      - '.github/workflows/kicad-export.yml'
+      - '.github/scripts/find-kicad-project.sh'
+  # Run it by hand from the Actions tab, e.g. to create the previews branch the first time
+  workflow_dispatch:
+
+permissions:
+  contents: write  # push rendered images to the `previews` branch
+
+concurrency:
+  group: kicad-export
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Locates the single *.kicad_pro in the repo, or reads .kicad-ci.env
+      - name: Find the KiCad project
+        id: project
+        run: bash .github/scripts/find-kicad-project.sh
+
+      - name: Render schematic and PCB with KiBot
+        # v2_k10 = latest KiBot release on KiCad 10 (matches the file format of this project)
+        uses: INTI-CMNB/KiBot@v2_k10
+        with:
+          config: .kibot/config.yml
+          dir: kibot-output
+          schema: ${{ steps.project.outputs.sch }}
+          board: ${{ steps.project.outputs.pcb }}
+
+      - name: Upload previews as a build artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kicad-previews
+          path: kibot-output
+          if-no-files-found: error
+
+      # Artifacts are zips behind a login, so a README can't embed them.
+      # Publish the images to a `previews` branch instead. It is force-pushed as
+      # a single orphan commit each time, so old images never pile up in history.
+      - name: Publish previews to the previews branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          publish_dir="$RUNNER_TEMP/previews"
+          rm -rf "$publish_dir"
+          mkdir -p "$publish_dir"
+          cp -r kibot-output/. "$publish_dir"
+          cd "$publish_dir"
+          git init -q -b previews
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "KiCad previews for ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" previews

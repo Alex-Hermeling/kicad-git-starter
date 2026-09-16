@@ -1,0 +1,50 @@
+# ---------- KiCad ----------
+
+# Lock files — created while a project is open, contain your hostname/username
+*.lck
+~*.lck
+
+# Per-user local settings: window layout, visible layers, last zoom.
+# Not project data — ignoring this avoids pointless diffs on every open/close.
+*.kicad_prl
+
+# KiCad's automatic backup zips. Binary, rewritten on every save,
+# and git cannot diff them. These are what bloat a KiCad repo.
+*-backups/
+
+# Autosave, rescue and stale-backup files
+_autosave-*
+*-rescue.kicad_sym
+*-rescue.lib
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.bak
+
+# Generated footprint cache
+fp-info-cache
+
+# Netlists — regenerated from the schematic on demand
+*.net
+
+# ---------- Generated fabrication output ----------
+# Adjust to taste: some people DO commit a tagged release's gerbers.
+# If you want that, delete these lines and commit them deliberately per revision.
+gerbers/
+production/
+fab/
+*.gbr
+*.gbrjob
+*.drl
+*.ps
+*.pos
+*.xy
+*-pos.csv
+*-bom.csv
+
+# KiBot output, if you run the CI configs locally
+kibot-output/
+kibot-diff/
+
+# ---------- OS / editor ----------
+.DS_Store
+*~

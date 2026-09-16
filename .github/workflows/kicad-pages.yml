@@ -1,0 +1,51 @@
+name: KiCad diff site
+
+# Publishes the pr-diffs branch (one KiRi site per open PR, plus a landing page)
+# to GitHub Pages at https://<owner>.github.io/<repo>/.
+#
+# kicad-diff.yml starts this after every change to that branch, because pushes
+# made with GITHUB_TOKEN can't trigger a Pages build on their own. You can also
+# run it by hand from the Actions tab.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: kicad-pages
+  # Never cancel a deploy that is running. A queued run replaces older queued ones,
+  # and it publishes the branch as it is when it starts, so no update is lost.
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the pr-diffs branch
+        uses: actions/checkout@v7
+        with:
+          ref: pr-diffs
+
+      - name: Package the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write     # create the Pages deployment
+      id-token: write  # prove the deployment comes from this repo's default branch
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

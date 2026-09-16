@@ -1,0 +1,95 @@
+name: Repo hygiene
+
+# Fails a PR into main that adds KiCad lock files, per-user settings, backups or
+# OS junk. Warns without failing (annotation and PR comment) when it adds gerbers
+# or other fabrication output. The rules are in .github/scripts/check-repo-files.sh,
+# shared with the local .githooks/pre-commit hook.
+#
+# One-time setup: make "Repo file check" a required status check for main
+# (Settings -> Rules -> Rulesets, or Settings -> Branches). Otherwise a PR with
+# a failing check can still be merged.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    # No paths filter: a required check has to report on every PR
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-hygiene-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Repo file check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # post / update the PR comment
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      # PRs from forks get a read-only token: they still get annotations and the check, but no comment
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      # HEAD is this PR merged into main and HEAD^1 is main, so two commits are
+      # enough to see exactly what merging would add.
+      - name: Checkout (merge commit and its parent)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check the files this PR adds or changes
+        id: check
+        run: |
+          # Deleted files are skipped, so a PR that removes a bad file passes
+          git diff --name-only --no-renames --diff-filter=d HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt"
+          echo "Files added or changed: $(wc -l < "$RUNNER_TEMP/changed.txt")"
+          # Don't fail here, so the comment still gets posted; the last step fails the job
+          REPORT_FILE="$RUNNER_TEMP/repo-hygiene.md" \
+            bash .github/scripts/check-repo-files.sh --github < "$RUNNER_TEMP/changed.txt" || true
+          cat "$RUNNER_TEMP/repo-hygiene.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post or update the PR comment
+        if: env.SAME_REPO == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BLOCKED: ${{ steps.check.outputs.blocked }}
+          WARNED: ${{ steps.check.outputs.warned }}
+        run: |
+          set -euo pipefail
+          marker='<!-- repo-hygiene -->'
+
+          ids=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${marker}\"))) | .id")
+          id="${ids%%$'\n'*}"
+
+          # Stay quiet on clean PRs, but turn an earlier warning into an all-clear once fixed
+          if [ "$BLOCKED" = 0 ] && [ "$WARNED" = 0 ] && [ -z "$id" ]; then
+            echo "Nothing to report"
+            exit 0
+          fi
+
+          body="$RUNNER_TEMP/repo-hygiene-comment.md"
+          { echo "$marker"; cat "$RUNNER_TEMP/repo-hygiene.md"; } > "$body"
+
+          # Edit our previous comment instead of adding a new one on every push
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@"$body" >/dev/null
+            echo "Updated comment $id"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@"$body" >/dev/null
+            echo "Posted a new comment"
+          fi
+
+      - name: Fail if the PR adds files that must not be merged
+        env:
+          BLOCKED: ${{ steps.check.outputs.blocked }}
+        run: |
+          # An empty count means the checker itself broke, which also fails
+          if [ "$BLOCKED" != 0 ]; then
+            echo "::error::This PR adds ${BLOCKED:-an unknown number of} file(s) that must not be merged. See the annotations or the PR comment."
+            exit 1
+          fi

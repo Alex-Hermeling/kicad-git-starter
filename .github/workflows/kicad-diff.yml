@@ -1,0 +1,194 @@
+name: KiCad visual diff
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - '**.kicad_sch'
+      - '**.kicad_pcb'
+      - '**.kicad_pro'
+      - '.kicad-ci.env'
+      - '.kibot/config_diff.yml'
+      - '.github/workflows/kicad-diff.yml'
+      - '.github/scripts/update-pr-diffs-branch.sh'
+      - '.github/scripts/find-kicad-project.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kicad-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  diff:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # push the KiRi site to the pr-diffs branch
+      pull-requests: write  # post / update the diff comment
+      actions: write        # start the GitHub Pages deploy workflow
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      # PRs from forks get a read-only token: they still get the PDF artifact, but no site or comment
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v7
+        with:
+          # KiBot checks out the old version itself, so it needs real history,
+          # not the default single-commit shallow clone.
+          fetch-depth: 0
+
+      - name: Fetch the target branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+      - name: Find what this PR changes
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only "origin/${BASE_REF}" HEAD -- '*.kicad_sch' '*.kicad_pcb')
+          parts=()
+          grep -q '\.kicad_sch$' <<<"$changed" && parts+=("schematic")
+          grep -q '\.kicad_pcb$' <<<"$changed" && parts+=("PCB")
+          case ${#parts[@]} in
+            0) summary="no schematic or PCB changes" ;;
+            1) summary="${parts[0]}" ;;
+            *) summary="${parts[0]} and ${parts[1]}" ;;
+          esac
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          echo "Changed: $summary"
+
+      # The KiBot action runs as root in a container, but the checkout belongs to
+      # the runner user, so git refuses to touch it ("dubious ownership").
+      # $RUNNER_TEMP/_github_home is mounted as $HOME inside the container, so a
+      # setting written there is picked up by git in KiBot.
+      - name: Let git inside the KiBot container trust the checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/_github_home"
+          git config --file "$RUNNER_TEMP/_github_home/.gitconfig" --add safe.directory '*'
+
+      # Locates the single *.kicad_pro in the repo, or reads .kicad-ci.env
+      - name: Find the KiCad project
+        id: project
+        run: bash .github/scripts/find-kicad-project.sh
+
+      - name: Generate KiRi site and diff PDFs with KiBot
+        uses: INTI-CMNB/KiBot@v2_k10
+        with:
+          config: .kibot/config_diff.yml
+          dir: kibot-diff
+          schema: ${{ steps.project.outputs.sch }}
+          board: ${{ steps.project.outputs.pcb }}
+
+      - name: Upload diff PDFs as a build artifact
+        id: pdfs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kicad-diff-pr-${{ github.event.pull_request.number }}
+          path: kibot-diff/diff
+          if-no-files-found: error
+
+      - name: Publish the KiRi site to the pr-diffs branch
+        if: env.SAME_REPO == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -f kibot-diff/kiri/index.html || { echo "::error::KiRi did not produce a site"; exit 1; }
+          bash .github/scripts/update-pr-diffs-branch.sh "$PR" kibot-diff/kiri
+
+      # Pushes made with GITHUB_TOKEN never trigger a Pages build, but starting a
+      # workflow does. The deploy workflow runs from the default branch, so on the
+      # PR that first adds it this fails harmlessly until it is merged.
+      - name: Start the GitHub Pages deploy
+        if: env.SAME_REPO == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh workflow run kicad-pages.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \
+            || echo "::warning::Could not start kicad-pages.yml on $DEFAULT_BRANCH (not merged yet?). The site is saved on the pr-diffs branch and goes live on the next deploy."
+
+      - name: Post or update the PR comment
+        if: env.SAME_REPO == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED: ${{ steps.changes.outputs.summary }}
+          PDF_URL: ${{ steps.pdfs.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          marker='<!-- kicad-visual-diff -->'
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          site="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/pr-${PR}/"
+          body="$RUNNER_TEMP/diff-comment.md"
+
+          cat > "$body" <<EOF
+          ${marker}
+          ## KiCad visual diff
+
+          ### [Open the interactive diff for this PR](${site})
+
+          This PR changes: **${CHANGED}**. Comparing \`${HEAD_REF}\` @ ${HEAD_SHA::7} with \`${BASE_REF}\`.
+
+          <details><summary>Using the viewer</summary>
+
+          - Switch between the schematic and the layout at the top of the page.
+          - Pick a schematic sheet or a PCB layer from the list; press <kbd>i</kbd> for keyboard shortcuts.
+          - Scroll to zoom, drag to pan.
+          - The two versions are labelled **This PR (merged into main)** and **main**.
+
+          </details>
+
+          <sub>The page goes live about a minute after each push. PDF version: [download](${PDF_URL}) · [workflow run](${RUN_URL})</sub>
+          EOF
+
+          # Edit our previous comment instead of adding a new one on every push
+          ids=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${marker}\"))) | .id")
+          id="${ids%%$'\n'*}"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@"$body" >/dev/null
+            echo "Updated comment $id"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@"$body" >/dev/null
+            echo "Posted a new comment"
+          fi
+
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # remove the site from the pr-diffs branch
+      actions: write  # start the GitHub Pages deploy workflow
+    steps:
+      - name: Checkout the helper script
+        uses: actions/checkout@v7
+        with:
+          # The PR's merge ref can disappear once it is closed; its head commit doesn't
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/scripts
+
+      - name: Remove this PR's site from the pr-diffs branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/update-pr-diffs-branch.sh "$PR"
+
+      - name: Start the GitHub Pages deploy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh workflow run kicad-pages.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \
+            || echo "::warning::Could not start kicad-pages.yml on $DEFAULT_BRANCH; the removal goes live on the next deploy."

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Stops a commit that stages KiCad lock files, per-user settings, backups or OS
+# junk, and warns (without stopping) about gerbers and other fabrication output.
+# Same rules as the "Repo file check" on pull requests.
+#
+# Enable once per clone:    git config core.hooksPath .githooks
+# Skip once, deliberately:  git commit --no-verify
+
+root=$(git rev-parse --show-toplevel)
+checker="$root/.github/scripts/check-repo-files.sh"
+
+# Checked out an older commit that doesn't have the checker yet
+[ -f "$checker" ] || exit 0
+
+git diff --cached --name-only --no-renames --diff-filter=d | bash "$checker"
