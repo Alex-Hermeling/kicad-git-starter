@@ -14,8 +14,10 @@ kicad-git-init.sh
 About 30 seconds later that folder is a GitHub repo with CI running, `main`
 protected, and a pre-commit hook installed.
 
-**Requirements:** macOS with Homebrew (the paths below assume it), `git`, the
-GitHub CLI, and a GitHub account. The CI uses KiBot for KiCad 10 file formats.
+**Requirements:** `git`, the [GitHub CLI](https://cli.github.com) (`gh`), and a
+GitHub account. The examples use macOS and Homebrew paths; Linux works the same
+way with a different directory for the symlink. The CI renders with KiBot, using
+the KiCad 10 file format.
 
 ---
 
