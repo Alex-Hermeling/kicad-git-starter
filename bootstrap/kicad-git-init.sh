@@ -148,12 +148,16 @@ info "pre-commit hook enabled (core.hooksPath=.githooks)"
 
 # Refuse to publish someone's lock files, backups or personal settings
 say "Checking for files that must not be committed"
-if ! $dry; then
+if $dry && [ ! -d .git ]; then
+  info "[dry-run] skipped: there's no git repo here yet to list files from"
+else
+  # .gitignore keeps most of this out; this catches anything already tracked
+  # or force-added in an existing repo
   { git ls-files; git ls-files --others --exclude-standard; } | sort -u \
-    | bash .github/scripts/check-repo-files.sh \
+    | bash "$starter/.github/scripts/check-repo-files.sh" \
     || die "fix the files listed above, then run this again."
+  info "nothing personal or generated is about to be committed"
 fi
-info "nothing personal or generated is about to be committed"
 
 say "Committing"
 if $dry; then
