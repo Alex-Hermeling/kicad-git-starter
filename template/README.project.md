@@ -44,8 +44,8 @@ merging it.
 
 ## What's tracked, and what isn't
 
-Tracked: `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `*.kicad_dru`, project
-library tables, and any project-specific `*.kicad_sym` / `*.kicad_mod`.
+Tracked: `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `*.kicad_dru`, and any
+project-specific `*.kicad_sym` / `*.kicad_mod`.
 
 Ignored: lock files, `*.kicad_prl` (per-user view settings), `*-backups/`,
 autosaves, `fp-info-cache`, netlists and fabrication output. The rule of thumb:
@@ -56,8 +56,9 @@ Two checks enforce that, since `.gitignore` alone doesn't stop `git add -f`:
 - **Repo file check** on every PR — fails on personal or backup files, and
   leaves a ⚠️ comment (without blocking) when a PR adds gerbers or other fab
   output, so it's a conscious decision.
-- **`.githooks/pre-commit`** locally. Enable it once per clone:
-  `git config core.hooksPath .githooks`
+- **`.githooks/pre-commit`** locally, which refuses the commit before it's made.
+  It's already enabled here. In any *other* clone of this repo, turn it on once
+  with `git config core.hooksPath .githooks`.
 
 ## Automated previews
 
