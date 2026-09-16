@@ -3,7 +3,8 @@
 A KiCad project, version-controlled with the
 [kicad-git-starter](https://github.com/<OWNER>/kicad-git-starter) setup.
 
-## Working on it
+<!-- kicad-git-usage -->
+## Using this repo
 
 ```bash
 # save and close KiCad first, so the board is written and the .lck is gone

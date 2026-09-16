@@ -127,15 +127,29 @@ done
 owner=$(gh api user --jq .login)
 slug="$owner/$name"
 
-if [ -e README.md ] && ! $force; then
-  info "kept existing README.md"
-else
-  run cp "$starter/template/README.project.md" README.md
-  if ! $dry; then
-    sed -e "s|<OWNER>/<REPO>|$slug|g" -e "s|<OWNER>|$owner|g" -e "s|<REPO>|$name|g" \
-      README.md > README.md.new && mv README.md.new README.md
+# Fill in the real owner/repo so the preview image links work
+subst() { sed -e "s|<OWNER>/<REPO>|$slug|g" -e "s|<OWNER>|$owner|g" -e "s|<REPO>|$name|g"; }
+readme_tpl="$starter/template/README.project.md"
+usage_marker='<!-- kicad-git-usage -->'
+
+if [ ! -e README.md ] || $force; then
+  if $dry; then
+    info "[dry-run] write README.md from template/README.project.md"
+  else
+    subst < "$readme_tpl" > README.md
   fi
   info "added README.md for $slug"
+elif grep -qF "$usage_marker" README.md; then
+  info "kept existing README.md (it already has the usage section)"
+else
+  # Keep the project's own README, but add the how-to-use half of the template
+  # to the end of it, so the instructions are still there for the next person.
+  if $dry; then
+    info "[dry-run] append the usage section to the existing README.md"
+  else
+    { printf '\n'; awk -v m="$usage_marker" 'index($0, m) { f = 1 } f' "$readme_tpl" | subst; } >> README.md
+  fi
+  info "appended the usage section to your existing README.md"
 fi
 
 # --- git ---------------------------------------------------------------------

@@ -4,15 +4,6 @@ Turns any KiCad project folder into a GitHub repo with visual diffs on pull
 requests, rendered previews of `main`, and a check that keeps lock files,
 backups and other personal junk out of the repo.
 
-One command per project:
-
-```bash
-cd ~/KiCad/projects/MyBoard
-kicad-git-init.sh
-```
-
-About 30 seconds later that folder is a GitHub repo with CI running, `main`
-protected, and a pre-commit hook installed.
 
 **Requirements:** `git`, the [GitHub CLI](https://cli.github.com) (`gh`), and a
 GitHub account. The examples use macOS and Homebrew paths; Linux works the same
@@ -36,7 +27,7 @@ Then clone this repository — copy the URL from its green **Code** button — a
 put the command on your PATH:
 
 ```bash
-git clone https://github.com/OWNER/kicad-git-starter.git ~/KiCad/kicad-git-starter
+git clone https://github.com/Alex-Hermeling/kicad-git-starter.git ~/KiCad/kicad-git-starter
 ln -s ~/KiCad/kicad-git-starter/bootstrap/kicad-git-init.sh /opt/homebrew/bin/kicad-git-init.sh
 ```
 
@@ -53,60 +44,90 @@ If that prints the usage text, you're done. `git pull` in
 `~/KiCad/kicad-git-starter` updates the command everywhere, because the PATH
 entry is a symlink into that clone.
 
-## 2. Starting a new project
+## 2. Running the script
 
-1. **KiCad → File → New Project**, e.g. `~/KiCad/projects/MyBoard`.
-2. Draw something, save, and **close KiCad** — that clears the `.lck` lock file.
-3. Run it:
+`kicad-git-init.sh` always runs **from inside a KiCad project folder**. It never
+creates board files, so make the project in KiCad first, save it, and close
+KiCad — that clears the `.lck` lock file.
+
+```
+Usage: kicad-git-init.sh [options]
+
+  --dry-run           Show what would happen, change nothing
+  --force             Overwrite starter files that already exist here
+  --no-create         Don't create a GitHub repo (use for an existing remote)
+  --private           Create the GitHub repo private (default: public)
+  --project <path>    Use this .kicad_pro when the repo holds several
+  -h, --help          This message
+```
+
+The GitHub repo is named after the folder you run it in, so
+`~/KiCad/projects/MyBoard` becomes `MyBoard`.
+
+With no flags it: finds your `.kicad_pro`, copies in the workflows,
+`.gitignore`, `.gitattributes` and the hook, runs `git init -b main`, enables
+the hook, checks that nothing personal is about to be committed, commits,
+creates the GitHub repo and pushes, applies branch protection to `main`, and
+enables Pages.
+
+### The flags, one at a time
+
+**`--dry-run`** — prints every action with a `[dry-run]` prefix and changes
+nothing, locally or on GitHub. Nothing is copied, no repo is created. Use it the
+first time on any project:
 
 ```bash
 cd ~/KiCad/projects/MyBoard
-kicad-git-init.sh
+kicad-git-init.sh --dry-run
 ```
 
-The repo is named after the folder. Want to see what it would do first? Add
-`--dry-run`: it prints every action and changes nothing.
-
-What it does, in order: finds your `.kicad_pro`, copies in the workflows,
-`.gitignore`, `.gitattributes` and hook, runs `git init`, enables the hook,
-checks that nothing personal is about to be committed, commits, creates the
-GitHub repo and pushes, applies branch protection to `main`, and enables Pages.
-
-## 3. Everyday use
-
-```bash
-git switch -c feature/thing      # branch (close KiCad first)
-git add -A && git commit -m "Add 3V3 regulator"
-git push -u origin HEAD
-gh pr create --fill
-```
-
-The PR gets an interactive visual diff of the schematic and layout. Merging
-needs the **Repo file check** to pass.
-
-## Options
-
-| Flag | Use it when |
-|---|---|
-| `--dry-run` | You want to see the plan without changing anything |
-| `--no-create` | The project is already on GitHub — adds the CI, hook and ruleset to the existing repo |
-| `--private` | The GitHub repo should be private (default is public) |
-| `--project <path>` | The repo holds more than one `.kicad_pro`; also writes `.kicad-ci.env` |
-| `--force` | Overwrite starter files that are already in the folder |
-
-By default nothing existing is overwritten: a file that's already there is kept
-and reported as "kept existing …".
-
-## Adding this to a project that already uses git
+**`--no-create`** — skips `gh repo create`. Use it when the project is already
+on GitHub: the script adds the CI, hook and ruleset to the existing repo and
+pushes to the remote that's already there. (If `origin` exists, creation is
+skipped automatically, flag or not.)
 
 ```bash
 cd ~/KiCad/projects/OldBoard
 kicad-git-init.sh --no-create
 ```
 
-It adds the machinery, commits it, pushes, and applies the ruleset. If the
-project already tracks files that shouldn't be there, it stops and prints the
-exact `git rm --cached` command to fix them first.
+If that project already tracks files that shouldn't be in it, the script stops
+before committing and prints the exact `git rm --cached` command to fix them.
+
+**`--private`** — creates the GitHub repo private. The default is public.
+Ignored when the repo already exists.
+
+**`--project <path>`** — picks the board when the folder holds more than one
+`.kicad_pro`. Pass the path with or without the extension; the script also
+writes a `.kicad-ci.env` so CI picks the same one later:
+
+```bash
+kicad-git-init.sh --project hardware/mainboard
+```
+
+**`--force`** — overwrites starter files that are already in the folder,
+including `README.md`. Without it nothing existing is touched: each file is kept
+and reported as `kept existing …`. Use it to pull in updated workflows after
+`git pull` in your starter clone.
+
+**`-h`, `--help`** — prints the usage text above and exits. Good for checking
+the symlink works.
+
+### Combining them
+
+Flags combine freely. A private repo for a multi-project folder, rehearsed
+first:
+
+```bash
+kicad-git-init.sh --dry-run --private --project hardware/mainboard
+kicad-git-init.sh --private --project hardware/mainboard
+```
+
+### After it finishes
+
+The script prints the repo URL and the next commands. Day-to-day use — branching,
+committing, reading the visual diff — is documented in the `README.md` it puts in
+the project itself, so it's there when you come back to the board later.
 
 ## What a project gets
 
@@ -119,7 +140,7 @@ exact `git rm --cached` command to fix them first.
 | `.githooks/pre-commit` | The same rules locally, before a commit is made |
 | `.gitignore`, `.gitattributes` | KiCad-aware ignores, and LF text handling so board files stay diffable |
 | `.kibot/*.yml` | KiBot configs behind the previews and diffs |
-| `README.md` | A starting README for the project, with your owner/repo filled in |
+| `README.md` | How to use the project repo — branching, PRs, the visual diff, what's tracked — with your owner/repo filled in. If the project already has a README, that section is appended to it instead |
 
 `bootstrap/ruleset.json` is the branch protection applied to `main`: pull
 requests required, **Repo file check** required, force-pushes and branch
@@ -189,7 +210,8 @@ read-only token, so they only get the downloadable PDF artifact.
 
 ## Status
 
-The detection script, the file checks, the hook and `--dry-run` are tested. The
+The detection script, the file checks, the hook, `--dry-run` and the README
+handling (new file, appended section, skip, `--force`) are tested. The
 live path — `gh repo create`, the ruleset and Pages API calls, and a real KiBot
 run using the detected paths — is lifted from a repo where it works, but hasn't
 been run end to end from this script yet. Use `--dry-run` first on your next
