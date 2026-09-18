@@ -5,6 +5,9 @@
 #
 #   cd ~/KiCad/projects/MyBoard && kicad-git-init.sh
 #
+# With --visual-diff-only it installs just the PR visual diff: no hygiene check,
+# no pre-commit hook, no branch protection, no previews of main.
+#
 # It never creates board files: make the project in KiCad first.
 # See README.md in the starter repo for the one-time setup.
 
@@ -17,6 +20,7 @@ STARTER_REPO="${KICAD_GIT_STARTER_REPO:-}"
 force=false
 create=true
 dry=false
+visual_diff_only=false
 visibility="--public"
 project_override=""
 
@@ -25,6 +29,8 @@ usage() {
 Usage: kicad-git-init.sh [options]
 
   --dry-run           Show what would happen, change nothing
+  --visual-diff-only  Install only the PR visual diff (no hygiene check,
+                      pre-commit hook, branch protection or main previews)
   --force             Overwrite starter files that already exist here
   --no-create         Don't create a GitHub repo (use for an existing remote)
   --private           Create the GitHub repo private (default: public)
@@ -36,6 +42,7 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)   dry=true ;;
+    --visual-diff-only) visual_diff_only=true ;;
     --force)     force=true ;;
     --no-create) create=false ;;
     --private)   visibility="--private" ;;
@@ -100,7 +107,22 @@ bash "$starter/.github/scripts/find-kicad-project.sh" | while IFS= read -r line;
 
 # --- copy the starter files --------------------------------------------------
 say "Adding the starter files"
-files="
+if $visual_diff_only; then
+  # Only what the PR diff needs. .gitignore and .gitattributes come along
+  # because they are what keeps lock files out and makes the board files diff
+  # as text in the first place.
+  files="
+.gitignore
+.gitattributes
+.github/scripts/find-kicad-project.sh
+.github/scripts/update-pr-diffs-branch.sh
+.github/workflows/kicad-diff.yml
+.github/workflows/kicad-pages.yml
+.kibot/config_diff.yml
+"
+  info "visual diff only: skipping the hygiene check, the pre-commit hook and the main previews"
+else
+  files="
 .gitignore
 .gitattributes
 .githooks/pre-commit
@@ -114,6 +136,7 @@ files="
 .kibot/config.yml
 .kibot/config_diff.yml
 "
+fi
 for f in $files; do
   if [ -e "$f" ] && ! $force; then
     info "kept existing $f"
@@ -129,12 +152,16 @@ slug="$owner/$name"
 
 # Fill in the real owner/repo so the preview image links work
 subst() { sed -e "s|<OWNER>/<REPO>|$slug|g" -e "s|<OWNER>|$owner|g" -e "s|<REPO>|$name|g"; }
-readme_tpl="$starter/template/README.project.md"
+if $visual_diff_only; then
+  readme_tpl="$starter/template/README.visual-diff.md"
+else
+  readme_tpl="$starter/template/README.project.md"
+fi
 usage_marker='<!-- kicad-git-usage -->'
 
 if [ ! -e README.md ] || $force; then
   if $dry; then
-    info "[dry-run] write README.md from template/README.project.md"
+    info "[dry-run] write README.md from template/$(basename "$readme_tpl")"
   else
     subst < "$readme_tpl" > README.md
   fi
@@ -160,8 +187,12 @@ else
   run git init -q -b main
   info "git init (branch main)"
 fi
-run git config core.hooksPath .githooks
-info "pre-commit hook enabled (core.hooksPath=.githooks)"
+if $visual_diff_only; then
+  info "no pre-commit hook (--visual-diff-only)"
+else
+  run git config core.hooksPath .githooks
+  info "pre-commit hook enabled (core.hooksPath=.githooks)"
+fi
 
 # Refuse to publish someone's lock files, backups or personal settings
 say "Checking for files that must not be committed"
@@ -174,6 +205,9 @@ else
     | bash "$starter/.github/scripts/check-repo-files.sh" \
     || die "fix the files listed above, then run this again."
   info "nothing personal or generated is about to be committed"
+  if $visual_diff_only; then
+    info "(this is a one-off check before publishing; no check is installed in the repo)"
+  fi
 fi
 
 say "Committing"
@@ -181,7 +215,12 @@ if $dry; then
   info "[dry-run] git add -A && git commit"
 elif [ -n "$(git status --porcelain)" ]; then
   git add -A
-  git commit -q --no-verify -m "Add KiCad git setup: CI previews, visual diffs and file checks"
+  if $visual_diff_only; then
+    msg="Add KiCad visual diff CI for pull requests"
+  else
+    msg="Add KiCad git setup: CI previews, visual diffs and file checks"
+  fi
+  git commit -q --no-verify -m "$msg"
   info "committed $(git rev-parse --short HEAD)"
 else
   info "nothing to commit"
@@ -211,12 +250,17 @@ if ! git remote get-url origin >/dev/null 2>&1; then
   exit 0
 fi
 
-say "Protecting main"
-if gh api "repos/$slug/rulesets" --jq '.[].name' 2>/dev/null | grep -qx "Main PR Rules"; then
-  info "ruleset 'Main PR Rules' already exists"
+if $visual_diff_only; then
+  say "Skipping branch protection (--visual-diff-only)"
+  info "main takes direct pushes; open a PR anyway to get the diff"
 else
-  gh api --method POST "repos/$slug/rulesets" --input "$starter/bootstrap/ruleset.json" >/dev/null
-  info "ruleset applied: PRs required, 'Repo file check' required, no force-push, no deletion"
+  say "Protecting main"
+  if gh api "repos/$slug/rulesets" --jq '.[].name' 2>/dev/null | grep -qx "Main PR Rules"; then
+    info "ruleset 'Main PR Rules' already exists"
+  else
+    gh api --method POST "repos/$slug/rulesets" --input "$starter/bootstrap/ruleset.json" >/dev/null
+    info "ruleset applied: PRs required, 'Repo file check' required, no force-push, no deletion"
+  fi
 fi
 
 say "Enabling GitHub Pages"
@@ -229,6 +273,21 @@ else
 fi
 
 say "Done: https://github.com/$slug"
+if $visual_diff_only; then
+cat <<EOF
+
+    Next:
+      1. Work on a branch:      git switch -c feature/thing
+      2. Push and open a PR:    git push -u origin HEAD && gh pr create --fill
+      3. The PR gets a comment linking an interactive KiRi visual diff of the
+         schematic and the layout against main.
+
+    Nothing here blocks a merge: main is unprotected and there is no file check.
+    To add those later, run: kicad-git-init.sh --no-create
+
+    Close KiCad before committing, so the .lck file is gone and the board is saved.
+EOF
+else
 cat <<EOF
 
     Next:
@@ -239,3 +298,4 @@ cat <<EOF
 
     Close KiCad before committing, so the .lck file is gone and the board is saved.
 EOF
+fi
