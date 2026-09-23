@@ -5,8 +5,8 @@
 #
 #   cd ~/KiCad/projects/MyBoard && kicad-git-init.sh
 #
-# With --visual-diff-only it installs just the PR visual diff: no hygiene check,
-# no pre-commit hook, no branch protection, no previews of main.
+# With --visual-diff-only it installs just the PR visual diff and the README
+# previews of main: no hygiene check, no pre-commit hook, no branch protection.
 #
 # It never creates board files: make the project in KiCad first.
 # See README.md in the starter repo for the one-time setup.
@@ -29,8 +29,8 @@ usage() {
 Usage: kicad-git-init.sh [options]
 
   --dry-run           Show what would happen, change nothing
-  --visual-diff-only  Install only the PR visual diff (no hygiene check,
-                      pre-commit hook, branch protection or main previews)
+  --visual-diff-only  Install only the PR visual diff and README previews
+                      (no hygiene check, pre-commit hook or branch protection)
   --force             Overwrite starter files that already exist here
   --no-create         Don't create a GitHub repo (use for an existing remote)
   --private           Create the GitHub repo private (default: public)
@@ -108,19 +108,21 @@ bash "$starter/.github/scripts/find-kicad-project.sh" | while IFS= read -r line;
 # --- copy the starter files --------------------------------------------------
 say "Adding the starter files"
 if $visual_diff_only; then
-  # Only what the PR diff needs. .gitignore and .gitattributes come along
-  # because they are what keeps lock files out and makes the board files diff
-  # as text in the first place.
+  # Only what the PR diff and the README previews need. .gitignore and
+  # .gitattributes come along because they are what keeps lock files out and
+  # makes the board files diff as text in the first place.
   files="
 .gitignore
 .gitattributes
 .github/scripts/find-kicad-project.sh
 .github/scripts/update-pr-diffs-branch.sh
 .github/workflows/kicad-diff.yml
+.github/workflows/kicad-export.yml
 .github/workflows/kicad-pages.yml
+.kibot/config.yml
 .kibot/config_diff.yml
 "
-  info "visual diff only: skipping the hygiene check, the pre-commit hook and the main previews"
+  info "visual diff only: skipping the hygiene check and the pre-commit hook"
 else
   files="
 .gitignore
@@ -216,7 +218,7 @@ if $dry; then
 elif [ -n "$(git status --porcelain)" ]; then
   git add -A
   if $visual_diff_only; then
-    msg="Add KiCad visual diff CI for pull requests"
+    msg="Add KiCad CI: visual diffs on pull requests and previews of main"
   else
     msg="Add KiCad git setup: CI previews, visual diffs and file checks"
   fi

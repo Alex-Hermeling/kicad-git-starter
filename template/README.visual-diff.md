@@ -58,9 +58,24 @@ autosaves, `fp-info-cache`, netlists and fabrication output. The rule of thumb:
 
 | Workflow | Trigger | Produces |
 |---|---|---|
+| `kicad-export.yml` | push to `main` | Schematic SVG/PDF and board PNGs, published to the `previews` branch |
 | `kicad-diff.yml` | pull request | Interactive KiRi diff vs `main`, plus red/green PDFs |
 | `kicad-pages.yml` | after a diff run | Publishes the diff sites to GitHub Pages |
 
 This repo was set up with `--visual-diff-only`, so it has no "Repo file check"
-workflow, no pre-commit hook, no branch protection and no rendered previews of
-`main`. To add them later, run `kicad-git-init.sh --no-create` here.
+workflow, no pre-commit hook and no branch protection. To add them later, run
+`kicad-git-init.sh --no-create` here.
+
+### Latest render of `main`
+
+These appear after the first run of the export workflow.
+
+**Schematic** ([PDF](https://github.com/<OWNER>/<REPO>/raw/previews/schematic/schematic.pdf))
+
+![Schematic](https://github.com/<OWNER>/<REPO>/raw/previews/schematic/schematic.svg)
+
+**PCB**
+
+| Top | Bottom |
+|---|---|
+| ![PCB top](https://github.com/<OWNER>/<REPO>/raw/previews/pcb/pcb-top.png) | ![PCB bottom](https://github.com/<OWNER>/<REPO>/raw/previews/pcb/pcb-bottom.png) |

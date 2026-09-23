@@ -53,8 +53,8 @@ KiCad — that clears the `.lck` lock file.
 Usage: kicad-git-init.sh [options]
 
   --dry-run           Show what would happen, change nothing
-  --visual-diff-only  Install only the PR visual diff (no hygiene check,
-                      pre-commit hook, branch protection or main previews)
+  --visual-diff-only  Install only the PR visual diff and README previews
+                      (no hygiene check, pre-commit hook or branch protection)
   --force             Overwrite starter files that already exist here
   --no-create         Don't create a GitHub repo (use for an existing remote)
   --private           Create the GitHub repo private (default: public)
@@ -83,13 +83,14 @@ kicad-git-init.sh --dry-run
 ```
 
 **`--visual-diff-only`** — installs just the part that puts a visual diff on a
-pull request, and nothing that enforces anything. You get `kicad-diff.yml`,
-`kicad-pages.yml`, the two scripts they call, `.kibot/config_diff.yml`,
+pull request and the schematic/PCB previews in the README, and nothing that
+enforces anything. You get `kicad-diff.yml`, `kicad-pages.yml`,
+`kicad-export.yml`, the two scripts they call, both `.kibot/*.yml` configs,
 `.gitignore` and `.gitattributes` — plus the repo, the commit, the push and
 GitHub Pages.
 
-Left out: the **Repo file check** workflow, the `.githooks/pre-commit` hook, the
-`main` ruleset, `kicad-export.yml` and `.kibot/config.yml`. So `main` stays
+Left out: the **Repo file check** workflow, the `.githooks/pre-commit` hook and
+the `main` ruleset. So `main` stays
 unprotected and nothing blocks a merge; open a PR anyway, because that's what
 triggers the diff. The project `README.md` written in this mode describes only
 what's installed.
@@ -180,9 +181,8 @@ requests required, **Repo file check** required, force-pushes and branch
 deletion blocked. Rulesets are *not* copied by GitHub's "template repository"
 feature, which is why this is a script rather than a template repo.
 
-With `--visual-diff-only` the table shrinks to `kicad-diff.yml`,
-`kicad-pages.yml`, `.github/scripts/*`, `.kibot/config_diff.yml`, `.gitignore`,
-`.gitattributes` and `README.md`; no ruleset is applied.
+With `--visual-diff-only` the table loses `repo-hygiene.yml`,
+`check-repo-files.sh` and `.githooks/pre-commit`, and no ruleset is applied.
 
 ## What it deliberately doesn't do
 
